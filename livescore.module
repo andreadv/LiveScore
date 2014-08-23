@@ -1,0 +1,111 @@
+<?php 
+
+/**
+ * Implements hook_help().
+ *
+ * Displays help and module information.
+ *
+ * @param path
+ *   Which path of the site we're using to display help
+ * @param arg
+ *   Array that holds the current path as returned from arg() function
+ */
+ 
+ /* Test function 
+function livescore_help($path, $arg) {
+  switch ($path) {
+    case "admin/help#livescore":
+      return '<p>' . t("Displays links to nodes created on this date") . '</p>';
+      break;
+  }
+} 
+
+*/
+
+/**
+ * Implements hook_block_info().
+ */
+ 
+
+ 
+function livescore_block_info() {
+  $blocks['livescore'] = array(
+    // The name that will appear in the block list.
+    'info' => t('LiveScore'),
+    // Default setting.
+    'cache' => DRUPAL_CACHE_PER_ROLE,
+  );
+  return $blocks;
+}
+
+
+/**
+ * Custom content function.
+ *
+ * Set beginning and end dates, retrieve matches from database
+ * live in that time period.
+ *
+ * @return
+ *   A result set of the targeted posts.
+ */
+ 
+function livescore_contents(){
+  //Get today's date.
+  $today = getdate();
+  
+  
+  //Calculate the time 2hrs from now.
+  $end_time = mktime($today['hours'] + 2, $today['minutes'], 0,$today['mon'],($today['mday']), $today['year']);
+  //Calculate the time 2hrs before.
+  $start_time = mktime($today['hours'] -2, $today['minutes'], 0,$today['mon'],($today['mday']), $today['year']);
+  
+  //Use Database API to retrieve current posts.
+  $query = db_select('matches', 'm');
+  $query -> join ( 'matches_participants', 'p', 'p.nid = m.nid');
+  $query -> join( 'teams', 't', 't.tid = p.id');	
+	$result = $query  
+    ->fields('m', array('nid', 'match_date'))
+	->fields('p', array('nid', 'id', 'score'))
+	->fields('t', array ('tid', 'name'))
+    ->condition('match_date', array($start_time, $end_time), 'BETWEEN')
+    ->orderBy('match_date', 'DESC') //Most recent first.
+    ->execute();
+  return $result;
+}
+
+/**
+ * Implements hook_block_view().
+ *
+ * Prepares the contents of the block.
+ */
+ 
+ 
+function livescore_block_view($delta = '') {
+  switch ($delta) {
+    case 'livescore':
+      $block['subject'] = t('LiveScore');
+      if (user_access('access content')) {
+        // Use our custom function to retrieve data.
+        $result2 = livescore_contents();
+        // Array to contain items for the block to render.
+        $items = array();
+        // Iterate over the resultset and format as links.
+        foreach ($result2 as $node) {
+			print_r($node);
+          $items[] = array(
+            'data' => l("Hold" . $node->name . ":" . $node->score, 'node/' . $node->nid),
+          );
+        }
+       // No content live right now.
+        if (empty($items)) {
+          $block['content'] = t('No match available.');
+        }
+        else {
+          // Pass data through theme function.
+          $block['content'] = theme('item_list', array(
+            'items' => $items));
+        }
+      }
+    return $block;
+  }
+}
