@@ -90,20 +90,31 @@ function livescore_block_view($delta = '') {
         // Array to contain items for the block to render.
         $items = array();
         // Iterate over the resultset and format as links.
+		$teams = array();
+		$scores = array();
+		$nids = array();
+		//Sorting the results to teams, scores, and nid.
         foreach ($result2 as $node) {
-			print_r($node);
-          $items[] = array(
-            'data' => l("Hold" . $node->name . ":" . $node->score, 'node/' . $node->nid),
-          );
+			array_push($teams, $node->name);
+			array_push($scores, $node->score);
+			array_push($nids, $node->nid);
         }
        // No content live right now.
-        if (empty($items)) {
+        if (empty($teams)) {
           $block['content'] = t('No match available.');
         }
         else {
+	//Group the information right: Every two team with every 2 results, linked to its node.
+			for( $i=0; $i<count($nids); $i=$i+2)
+		{
+		$items[] = array(
+            'data' => l($teams[$i] . " - " . $teams[$i+1] . ": " . $scores[$i] . "-" . $scores[$i+1], 'node/' . $nids[$i]),
+			);
+			};
           // Pass data through theme function.
           $block['content'] = theme('item_list', array(
             'items' => $items));
+			
         }
       }
     return $block;
