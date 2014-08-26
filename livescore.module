@@ -1,35 +1,23 @@
 <?php 
 
-/**
- * Implements hook_help().
- *
- * Displays help and module information.
- *
- * @param path
- *   Which path of the site we're using to display help
- * @param arg
- *   Array that holds the current path as returned from arg() function
- */
- 
- /* Test function 
-function livescore_help($path, $arg) {
-  switch ($path) {
-    case "admin/help#livescore":
-      return '<p>' . t("Displays links to nodes created on this date") . '</p>';
-      break;
-  }
-} 
 
-*/
 
 /**
  * Implements hook_block_info().
  */
  
-
- 
 function livescore_block_info() {
-  $blocks['livescore'] = array(
+	
+	//Creating block for listing the live-matches.
+   $blocks['livematches'] = array(
+    // The name that will appear in the block list.
+    'info' => t('LiveMatches'),
+    // Default setting.
+    'cache' => DRUPAL_CACHE_PER_ROLE,
+  );
+  
+  //Creating block for changing the score under live-matches.
+    $blocks['livescore'] = array(
     // The name that will appear in the block list.
     'info' => t('LiveScore'),
     // Default setting.
@@ -49,11 +37,9 @@ function livescore_block_info() {
  *   A result set of the targeted posts.
  */
  
-function livescore_contents(){
+function livematches_contents(){
   //Get today's date.
   $today = getdate();
-  
-  
   //Calculate the time 2hrs from now.
   $end_time = mktime($today['hours'] + 2, $today['minutes'], 0,$today['mon'],($today['mday']), $today['year']);
   //Calculate the time 2hrs before.
@@ -74,6 +60,41 @@ function livescore_contents(){
 }
 
 /**
+ * Custom content function.
+ *
+ * Get the targeted post.
+ * Get the info we have to use to update the results.
+ *
+ * @return
+ *   A result set of the post, and information.
+ */
+function livesscore_contents(){
+	if ($node = menu_get_object()) {
+ 		 // Get the nid
+  		$node_id = $node->nid;
+	}
+  //Get today's date.
+  $today = getdate();
+  //Calculate the time 2hrs from now.
+  $end_time = mktime($today['hours'] + 2, $today['minutes'], 0,$today['mon'],($today['mday']), $today['year']);
+  //Calculate the time 2hrs before.
+  $start_time = mktime($today['hours'] -2, $today['minutes'], 0,$today['mon'],($today['mday']), $today['year']);
+	 
+	 //Use Database API to retrieve current posts.
+  $query = db_select('matches', 'm');
+  $query -> join ( 'matches_participants', 'p', 'p.nid = m.nid');
+  $query -> join( 'teams', 't', 't.tid = p.id');	
+	$result = $query  
+    ->fields('m', array('nid', 'match_date'))
+	->fields('p', array('nid', 'id', 'score'))
+	->fields('t', array ('tid', 'name'))
+    ->condition('m.nid', $node_id)
+    ->condition('match_date', array($start_time, $end_time), 'BETWEEN')
+    ->execute();
+  return $result;
+	}
+
+/**
  * Implements hook_block_view().
  *
  * Prepares the contents of the block.
@@ -81,12 +102,22 @@ function livescore_contents(){
  
  
 function livescore_block_view($delta = '') {
+	$block = array();
+	$teams_ls = array();
+	$scores_ls = array();
+	$nids_ls = array();
+	
   switch ($delta) {
-    case 'livescore':
-      $block['subject'] = t('LiveScore');
+ 
+	 /**
+	  * Creates the livematches block.
+	  */ 
+	 
+    case 'livematches':
+      $block['subject'] = t('Kampe live - lige nu');
       if (user_access('access content')) {
         // Use our custom function to retrieve data.
-        $result2 = livescore_contents();
+        $result2 = livematches_contents();
         // Array to contain items for the block to render.
         $items = array();
         // Iterate over the resultset and format as links.
@@ -109,7 +140,7 @@ function livescore_block_view($delta = '') {
 		{
 		$items[] = array(
             'data' => l($teams[$i] . " - " . $teams[$i+1] . ": " . $scores[$i] . "-" . $scores[$i+1], 'node/' . $nids[$i]),
-			);
+		);
 			};
           // Pass data through theme function.
           $block['content'] = theme('item_list', array(
@@ -117,6 +148,135 @@ function livescore_block_view($delta = '') {
 			
         }
       }
-    return $block;
+	  break;
+	  
+	  case 'livescore':
+	  	$block['subject'] = t('Update LiveScore');
+     	 if (user_access('access content')) {
+        // Use our custom function to retrieve data.
+        $result_ls = livesscore_contents();
+        // Array to contain items for the block to render.
+        $items_ls = array();
+        // Iterate over the resultset and format as links.
+		//Sorting the results to teams, scores, and nid.
+		
+        foreach ($result_ls as $node) {
+			array_push($teams_ls, $node->name);
+			array_push($scores_ls, $node->score);
+			array_push($nids_ls, $node->nid);
+        }
+       // No content live right now.
+        if (empty($teams_ls)) {
+          $block['content'] = t('No match available.');
+        }
+        else {
+	//Group the information right: Every two team with every 2 results, linked to its node.
+		/* 
+		-----UNØDVENDIGT:
+			for( $i=0; $i<count($nids_ls); $i=$i+2)
+		{
+		$items_ls[] = array(
+            'data' => l($teams_ls[$i] . " - " . $teams_ls[$i+1] . ": " . $scores_ls[$i] . "-" . $scores_ls[$i+1], 'node/' . $nids_ls[$i]),
+		);
+			};
+			SLUT UNØDVENDIGT-----
+			 */
+			
+			/**
+			 *  Form constructor for the example form.
+			 */
+		function livescore_update_livescore_form($form, &$form_state) {
+				$teams_ls = array();
+				$scores_ls = array();
+				$nids_ls = array();
+        // Use our custom function to retrieve data.
+        $result_ls = livesscore_contents();
+        // Array to contain items for the block to render.
+        $items_ls = array();
+        // Iterate over the resultset and format as links.
+		//Sorting the results to teams, scores, and nid.
+		
+        foreach ($result_ls as $node) {
+			array_push($teams_ls, $node->name);
+			array_push($scores_ls, $node->score);
+			array_push($nids_ls, $node->nid);
+        }
+			  // Provide a text field.
+			  $form['score1'] = array(
+				'#title' => t($teams_ls[0]),
+				'#type' => 'textfield',
+ 				'#element_validate' => array('element_validate_integer_positive'), 
+				'#required' => TRUE,
+			  );
+			  
+			  $form['score2'] = array(
+				'#title' => t($teams_ls[1]),
+				'#type' => 'textfield',
+ 				'#element_validate' => array('element_validate_integer_positive'), 
+				'#required' => TRUE,
+			  );
+			  // Provide a submit button.
+			  $form['submit'] = array(
+				'#type' => 'submit',
+				'#value' => 'Opdatere',
+			  );
+			  return $form;
+			}
+			
+			// Adds a submit handler/function to our form to send a successful
+			// completion message to the screen.
+			function livescore_update_livescore_form_submit($form, &$form_state) {
+				drupal_set_message(t('The form has been submitted.'));
+				$teams_ls = array();
+				$scores_ls = array();
+				$nids_ls = array();
+				$ids_ls = array();
+				$score1 = $form_state['values']['score1'];
+				$score2 = $form_state['values']['score2'];
+				$result_ls = livesscore_contents();
+					// Array to contain items for the block to render.
+					$items_ls = array();
+					// Iterate over the resultset and format as links.
+					//Sorting the results to teams, scores, and nid.
+						foreach ($result_ls as $node) {
+							array_push($teams_ls, $node->name);
+							array_push($scores_ls, $node->score);
+							array_push($nids_ls, $node->nid);
+							array_push($ids_ls, $node->id);
+						}
+				if ($node = menu_get_object()) {
+					 // Get the nid
+					$node_id = $node->nid;
+				}
+				$query = db_update('matches_participants')
+					->fields(array(
+						'score' => $score1,
+					  ))
+					  ->condition('nid', $node_id)
+					  ->condition('id', $ids_ls[0])
+					  ->execute();
+				$query = db_update('matches_participants')
+					->fields(array(
+						'score' => $score2,
+					  ))
+					  ->condition('nid', $node_id)
+					  ->condition('id', $ids_ls[1])
+					  ->execute();
+					
+								}
+			
+          // Rendering the form to insert livescore inside.
+		  $block['content'] = drupal_get_form('livescore_update_livescore_form');
+        }
+		
+      }
+ 
+	  
+	  break;
   }
+    return $block;
 }
+
+
+
+
