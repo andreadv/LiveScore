@@ -85,10 +85,12 @@ function livesscore_contents(){
   $query -> join ( 'matches_participants', 'p', 'p.nid = m.nid');
   $query -> join( 'teams', 't', 't.tid = p.id');	
 	$result = $query  
-    ->fields('m', array('nid', 'match_date'))
+    ->fields('m', array('nid', 'match_date', 'match_status'))
 	->fields('p', array('nid', 'id', 'score'))
 	->fields('t', array ('tid', 'name'))
     ->condition('m.nid', $node_id)
+	//Condition to make sure final result should not be changed.
+    ->condition('m.match_status', '16', '!=')
     ->condition('match_date', array($start_time, $end_time), 'BETWEEN')
     ->execute();
   return $result;
@@ -262,9 +264,7 @@ function livescore_block_view($delta = '') {
 					  ->condition('nid', $node_id)
 					  ->condition('id', $ids_ls[1])
 					  ->execute();
-					
 								}
-			
           // Rendering the form to insert livescore inside.
 		  $block['content'] = drupal_get_form('livescore_update_livescore_form');
         }
