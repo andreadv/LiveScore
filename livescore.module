@@ -16,6 +16,14 @@ function livescore_block_info() {
     'cache' => DRUPAL_CACHE_PER_ROLE,
   );
   
+  //Creating block for listing the live-matches on fornt-page.
+   $blocks['frontlivematches'] = array(
+    // The name that will appear in the block list.
+    'info' => t('LiveMatches_front'),
+    // Default setting.
+    'cache' => DRUPAL_CACHE_PER_ROLE,
+  );
+  
   //Creating block for changing the score under live-matches.
     $blocks['livescore'] = array(
     // The name that will appear in the block list.
@@ -41,9 +49,9 @@ function livematches_contents(){
   //Get today's date.
   $today = getdate();
   //Calculate the time 2hrs from now.
-  $end_time = mktime($today['hours'] + 2, $today['minutes'], 0,$today['mon'],($today['mday']), $today['year']);
+  $end_time = mktime($today['hours'] + 1, $today['minutes'], 0,$today['mon'],($today['mday']), $today['year']);
   //Calculate the time 2hrs before.
-  $start_time = mktime($today['hours'] -2, $today['minutes'], 0,$today['mon'],($today['mday']), $today['year']);
+  $start_time = mktime($today['hours'] - 4, $today['minutes'], 0,$today['mon'],($today['mday']), $today['year']);
   
   //Use Database API to retrieve current posts.
   $query = db_select('matches', 'm');
@@ -69,16 +77,22 @@ function livematches_contents(){
  *   A result set of the post, and information.
  */
 function livesscore_contents(){
+	//Check if other than frontpage. If front page, than it will throw an error.
+	//if(!drupal_is_front_page()){
+	//Checking for Frontpage is not enough - we have to check if it is node. Team pages are not nodes.	
+		
+		if (node_is_page(menu_get_object())){
+	
 	if ($node = menu_get_object()) {
  		 // Get the nid
   		$node_id = $node->nid;
 	}
   //Get today's date.
   $today = getdate();
-  //Calculate the time 2hrs from now.
-  $end_time = mktime($today['hours'] + 2, $today['minutes'], 0,$today['mon'],($today['mday']), $today['year']);
-  //Calculate the time 2hrs before.
-  $start_time = mktime($today['hours'] -2, $today['minutes'], 0,$today['mon'],($today['mday']), $today['year']);
+  //Calculate the time 4hrs from now.
+  $end_time = mktime($today['hours'] + 1, $today['minutes'], 0,$today['mon'],($today['mday']), $today['year']);
+  //Calculate the time 1hrs before.
+  $start_time = mktime($today['hours'] - 4, $today['minutes'], 0,$today['mon'],($today['mday']), $today['year']);
 	 
 	 //Use Database API to retrieve current posts.
   $query = db_select('matches', 'm');
@@ -89,13 +103,13 @@ function livesscore_contents(){
 	->fields('p', array('nid', 'id', 'score'))
 	->fields('t', array ('tid', 'name'))
     ->condition('m.nid', $node_id)
-	//Condition to make sure final result should not be changed.
+	//Condition to make sure final result can not be changed.
     ->condition('m.match_status', '16', '!=')
     ->condition('match_date', array($start_time, $end_time), 'BETWEEN')
     ->execute();
   return $result;
 	}
-
+} //End if(!drupal_is_front_page())
 /**
  * Implements hook_block_view().
  *
@@ -104,6 +118,12 @@ function livesscore_contents(){
  
  
 function livescore_block_view($delta = '') {
+	
+	//First check if other than frontpage. If frontpage it will throw an error.
+	// if(!drupal_is_front_page()){
+		//Check if it node.
+	if (node_is_page(menu_get_object())){
+	
 	$block = array();
 	$teams_ls = array();
 	$scores_ls = array();
@@ -116,7 +136,7 @@ function livescore_block_view($delta = '') {
 	  */ 
 	 
     case 'livematches':
-      $block['subject'] = t('Kampe live - lige nu');
+      $block['subject'] = t('Alle livekampe - lige nu');
       if (user_access('access content')) {
         // Use our custom function to retrieve data.
         $result2 = livematches_contents();
@@ -134,7 +154,44 @@ function livescore_block_view($delta = '') {
         }
        // No content live right now.
         if (empty($teams)) {
-          $block['content'] = t('No match available.');
+          $block['content'] = t('Ingen kampe spilles i øjeblikket.');
+        }
+        else {
+	//Group the information right: Every two team with every 2 results, linked to its node.
+			for( $i=0; $i<count($nids); $i=$i+2)
+		{
+		$items[] = array(
+            'data' => l($teams[$i] . " - " . $teams[$i+1] . ": " . $scores[$i] . "-" . $scores[$i+1], 'node/' . $nids[$i]),
+		);
+			};
+          // Pass data through theme function.
+          $block['content'] = theme('item_list', array(
+            'items' => $items));
+			
+        }
+      }
+	  break;
+	  
+	  case 'frontlivematches':
+      $block['subject'] = t('Alle livekampe - lige nu');
+      if (user_access('access content')) {
+        // Use our custom function to retrieve data.
+        $result2 = livematches_contents();
+        // Array to contain items for the block to render.
+        $items = array();
+        // Iterate over the resultset and format as links.
+		$teams = array();
+		$scores = array();
+		$nids = array();
+		//Sorting the results to teams, scores, and nid.
+        foreach ($result2 as $node) {
+			array_push($teams, $node->name);
+			array_push($scores, $node->score);
+			array_push($nids, $node->nid);
+        }
+       // No content live right now.
+        if (empty($teams)) {
+          $block['content'] = t('Ingen kampe spilles i øjeblikket.');
         }
         else {
 	//Group the information right: Every two team with every 2 results, linked to its node.
@@ -153,7 +210,7 @@ function livescore_block_view($delta = '') {
 	  break;
 	  
 	  case 'livescore':
-	  	$block['subject'] = t('Update LiveScore');
+	  	$block['subject'] = t('LiveScore');
      	 if (user_access('access content')) {
         // Use our custom function to retrieve data.
         $result_ls = livesscore_contents();
@@ -169,24 +226,9 @@ function livescore_block_view($delta = '') {
         }
        // No content live right now.
         if (empty($teams_ls)) {
-          $block['content'] = t('No match available.');
+          $block['content'] = t('Du skal trykke på kampen der er live lige nu for at kunne livescore den! ellers er der ingen kampe i gang lige nu.');
         }
         else {
-	//Group the information right: Every two team with every 2 results, linked to its node.
-		/* 
-		-----UNØDVENDIGT:
-			for( $i=0; $i<count($nids_ls); $i=$i+2)
-		{
-		$items_ls[] = array(
-            'data' => l($teams_ls[$i] . " - " . $teams_ls[$i+1] . ": " . $scores_ls[$i] . "-" . $scores_ls[$i+1], 'node/' . $nids_ls[$i]),
-		);
-			};
-			SLUT UNØDVENDIGT-----
-			 */
-			
-			/**
-			 *  Form constructor for the example form.
-			 */
 		function livescore_update_livescore_form($form, &$form_state) {
 				$teams_ls = array();
 				$scores_ls = array();
@@ -207,20 +249,20 @@ function livescore_block_view($delta = '') {
 			  $form['score1'] = array(
 				'#title' => t($teams_ls[0]),
 				'#type' => 'textfield',
- 				'#element_validate' => array('element_validate_integer_positive'), 
+ 				'#element_validate' => array('element_validate_integer'), 
 				'#required' => TRUE,
 			  );
 			  
 			  $form['score2'] = array(
 				'#title' => t($teams_ls[1]),
 				'#type' => 'textfield',
- 				'#element_validate' => array('element_validate_integer_positive'), 
+ 				'#element_validate' => array('element_validate_integer'), 
 				'#required' => TRUE,
 			  );
 			  // Provide a submit button.
 			  $form['submit'] = array(
 				'#type' => 'submit',
-				'#value' => 'Opdatere',
+				'#value' => 'Opdater',
 			  );
 			  return $form;
 			}
@@ -228,7 +270,7 @@ function livescore_block_view($delta = '') {
 			// Adds a submit handler/function to our form to send a successful
 			// completion message to the screen.
 			function livescore_update_livescore_form_submit($form, &$form_state) {
-				drupal_set_message(t('The form has been submitted.'));
+				drupal_set_message(t('Din livescore er registreret. Tak!'));
 				$teams_ls = array();
 				$scores_ls = array();
 				$nids_ls = array();
@@ -275,8 +317,53 @@ function livescore_block_view($delta = '') {
 	  break;
   }
     return $block;
+}//End if(!drupal_is_front_page())
 }
 
 
+/*
+VIRKER KUN MED DEVEL MODUL INSTALLERET!
+
+function livescore_form_alter(&$form, &$form_state, $form_id) {
+  dsm($form_id);  // print form ID to messages
+ dsm($form);  // pretty print array using Krumo to messages
+}
+*/
+/*
 
 
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+
+function livescore_form_alter(&$form, &$form_state, $form_id) {
+	if ($form_id == 'match_node_form'){
+		/* PRINT alt ud - i en array. Meget handy. 
+		print '<pre>';
+		print_r($form);
+		print '</pre>';
+		*/
+		global $user;
+		if ($user->uid != 1 && !in_array('administrator', $user->roles)) {
+				$form['entity_type']['#access']= FALSE;
+				$form['match_date']['#access']= FALSE;
+				$form['advanced']['#access']= FALSE;
+				$form['participants_wrapper']['#access']= FALSE;
+				$form['field_taxonomy']['#access'] = FALSE;
+				$form['comment_settings']['#access']= FALSE;
+				$form['author']['#access']= FALSE;
+				$form['revision_information']['#access']= FALSE;
+		}
+	}
+}
+
+function livescore_urlencode($text) {
+  		if (variable_get('clean_url', '0')) {
+    return str_replace(array('%2F', '%3F', '%3D', '%26', '%2523'),
+                       array('/', '?', '=', '&', '#'),
+                       urlencode($text));
+  }
+  else {
+    return str_replace('%2F', '/', urlencode($text));
+  }
+}

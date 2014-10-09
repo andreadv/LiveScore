@@ -1,3 +1,4 @@
 name = LiveScore
 description = Creates the main functionality for LokalScore.com
 core = 7.x
+dependencies[] = tournament
